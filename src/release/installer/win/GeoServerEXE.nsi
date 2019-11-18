@@ -7,12 +7,13 @@
 
 ; Define your application name
 !define APPNAME "GeoServer"
-!define VERSION "2.16-SNAPSHOT"
+!define VERSION "2.16.0"
 ;!define LONGVERSION "2.0.0.0"
 !define APPNAMEANDVERSION "${APPNAME} ${VERSION}"
 
 ; Main Install settings
 Name "${APPNAMEANDVERSION}"
+; This just sets the default value, according to NSIS docs. You can overwrite it later with $INSTDIR -- SLG
 InstallDir "$PROGRAMFILES\${APPNAMEANDVERSION}"
 InstallDirRegKey HKLM "Software\${APPNAME}" ""
 OutFile "geoserver-${VERSION}.exe"
@@ -55,6 +56,12 @@ Var Manual
 Var Service
 Var Port
 Var PortHWND
+Var SitkaProductName
+var SitkaProductNameHWND
+Var AppNameSitkaProductNameAndVersion
+Var SitkaOverrideInstallDir 
+
+;Var CheezWiz
 
 ;Version Information (Version tab for EXE properties)
 ;VIProductVersion ${LONGVERSION}
@@ -73,16 +80,22 @@ Var PortHWND
 !define MUI_HEADERIMAGE_BITMAP header.bmp
 !define MUI_WELCOMEFINISHPAGE_BITMAP side_left.bmp
 
+; This is where the installer stores the last install directory used.
+; Since this directory varies dynamically depending on which Sitka Product is being installed,
+; we can't take advantage of this without a lot of work and/or confusion. Better that the user picks,
+; each & every time, and that we give a resonable default instead ("GeoServer Gemin v1.6.4" or similar)
+;
+; -- SLG 11/18/2019
 ;Start Menu Folder Page Configuration
-!define MUI_STARTMENUPAGE_REGISTRY_ROOT "HKLM" 
-!define MUI_STARTMENUPAGE_REGISTRY_KEY "Software\${APPNAME}" 
-!define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "Start Menu Folder"
+;!define MUI_STARTMENUPAGE_REGISTRY_ROOT "HKLM" 
+;!define MUI_STARTMENUPAGE_REGISTRY_KEY "Software\${APPNAME}" 
+;!define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "Start Menu Folder"
 
 ; "Are you sure you wish to cancel" popup.
 !define MUI_ABORTWARNING
 
 ; Optional welcome text here
-  !define MUI_WELCOMEPAGE_TEXT "This wizard will guide you through the installation of ${APPNAMEANDVERSION}. \r\n\r\n\
+  !define MUI_WELCOMEPAGE_TEXT "This wizard will guide you through the installation of GeoServer for a Sitka Product. \r\n\r\n\
 	It is recommended that you close all other applications before starting Setup.\
 	This will make it possible to update relevant system files without having to reboot your computer.\r\n\r\n\
 	Please report any problems or suggestions to the GeoServer Users mailing list: geoserver-users@lists.sourceforge.net. \r\n\r\n\
@@ -93,8 +106,33 @@ Var PortHWND
 !insertmacro MUI_PAGE_WELCOME                                 ; Hello
 Page custom CheckUserType                                     ; Die if not admin
 !insertmacro MUI_PAGE_LICENSE "LICENSE.txt"                   ; Show license
+Page custom SitkaProductName								  ; Get Sitka Product Name ("Gemini", "Champ", "Reclamation" etc.)
+
+; Original:
+;!define MUI_DIRECTORYPAGE_VARIABLE $APPDIR
+
+; Sitka attempt/hack:
+;!define MUI_DIRECTORYPAGE_VARIABLE $INSTDIR 
+;!define MUI_DIRECTORYPAGE_VARIABLE $TotalCheezBall 
+!define MUI_DIRECTORYPAGE_VARIABLE $SitkaOverrideInstallDir 
 !insertmacro MUI_PAGE_DIRECTORY                               ; Where to install
+
+; Original version
+;!insertmacro MUI_PAGE_STARTMENU Application $STARTMENU_FOLDER ; Start menu location
+
+; SLG >> Now this is the next thing to fix >> 
+; Although this is a "define", you can actually set it from a variable, which is great, but confusing
+; if you are anticipating C/C++ style defines. Looking a gift horse in the mouth. -- SLG
+
+; Can't really do this here...
+;MessageBox MB_OK "AppNameSitkaProductNameAndVersion: $AppNameSitkaProductNameAndVersion"
+;MessageBox MB_OK "SitkaOverrideInstallDir : $SitkaOverrideInstallDir"
+
+;!define MUI_STARTMENUPAGE_DEFAULTFOLDER $CheezWiz
+!define MUI_STARTMENUPAGE_DEFAULTFOLDER $AppNameSitkaProductNameAndVersion
 !insertmacro MUI_PAGE_STARTMENU Application $STARTMENU_FOLDER ; Start menu location
+
+
 Page custom GetJRE                                            ; Look for exisitng JRE
 Page custom JRE JRELeave                                      ; Set the JRE
 Page custom GetDataDir                                        ; Look for existing data_dir
@@ -128,6 +166,9 @@ LangString TEXT_CREDS_SUBTITLE ${LANG_ENGLISH} "Set administrator credentials"
 LangString TEXT_PORT_TITLE ${LANG_ENGLISH} "GeoServer Web Server Port"
 LangString TEXT_PORT_SUBTITLE ${LANG_ENGLISH} "Set the port that GeoServer will respond on"
 
+LangString TEXT_SITKA_PRODUCT_NAME_TITLE ${LANG_ENGLISH} "Sitka Product Name"
+LangString TEXT_SITKA_PRODUCT_NAME_SUBTITLE ${LANG_ENGLISH} "Set the Sitka product name for this installation of GeoServer (Gemini, Reclamation, etc.)"
+
 ; Startup tasks
 Function .onInit
 	
@@ -141,6 +182,13 @@ Function .onInit
   Delete $TEMP\spltmp.bmp
 	
   StrCpy $IsManual 1  ; Set to run manually by default
+  StrCpy $SitkaProductName "Gemini"
+  
+  ;StrCpy $TotalCheezBall "Total Cheez Ball"
+  ;StrCpy $SitkaOverrideInstallDir  "$PROGRAMFILES\${APPNAMEANDVERSION}"
+  StrCpy $SitkaOverrideInstallDir  "Another Cheez Ball"
+  
+  ;StrCpy $CheezWiz "Cheezy Wiz"
 		
 FunctionEnd
 
@@ -593,6 +641,8 @@ FunctionEnd
 ; When username value is changed (realtime)
 Function UsernameCheck
 
+  MessageBox MB_OK "Top of UsernameCheck"
+
   ; Check for illegal values of $GSUser and fix immediately
   ${NSD_GetText} $GSUserHWND $GSUser
   StrCmp $GSUser "" NoContinue Continue
@@ -606,7 +656,6 @@ Function UsernameCheck
     GetDlgItem $0 $HWNDPARENT 1 ; Next
     EnableWindow $0 1 ; Enable
   End:
-
 
 FunctionEnd
 
@@ -628,6 +677,101 @@ Function PasswordCheck
   End:
 
 FunctionEnd
+
+
+
+
+
+
+
+
+
+
+
+
+; Set the Sitka product name
+Function SitkaProductName
+
+  ;MessageBox MB_OK "Top of SitkaProductName"
+  Call SetAppNameSitkaProductNameAndVersion
+  ;MessageBox MB_OK "After SitkaProductNameUpdate call"
+
+  !insertmacro MUI_HEADER_TEXT "$(TEXT_SITKA_PRODUCT_NAME_TITLE)" "$(TEXT_SITKA_PRODUCT_NAME_SUBTITLE)"
+  nsDialogs::Create 1018
+
+  ; Populates defaults on first display, and resets to default user blanked any of the values
+  StrCmp $SitkaProductName "" 0 +2
+    StrCpy $SitkaProductName "Gemini"
+
+  ;Syntax: ${NSD_*} x y width height text
+  ${NSD_CreateLabel} 0 0 100% 36u "Set the Sitka product name (Gemini, Champ, Reclamation, etc.)"
+
+  ${NSD_CreateLabel} 05u 40u 80u 14u "Sitka Product Name"  
+  ${NSD_CreateText} 90u 38u 200u 14u $SitkaProductName
+  Pop $SitkaProductNameHWND
+  ${NSD_OnChange} $SitkaProductNameHWND SitkaProductNameUpdate  
+  
+  nsDialogs::Show
+
+FunctionEnd
+
+; When SitkaProductName value is changed (realtime)
+Function SitkaProductNameUpdate
+
+  ;MessageBox MB_OK "Top of SitkaProductNameUpdate"
+
+  ; Check for illegal values of $SitkaProductName and fix immediately
+  ${NSD_GetText} $SitkaProductNameHWND $SitkaProductName
+  StrCmp $SitkaProductName "" NoContinue Continue
+
+  NoContinue:
+    GetDlgItem $0 $HWNDPARENT 1 ; Next
+    EnableWindow $0 0 ; Disable
+    Goto End
+  Continue:  
+	Call SetAppNameSitkaProductNameAndVersion
+    GetDlgItem $0 $HWNDPARENT 1 ; Next
+    EnableWindow $0 1 ; Enable
+  End:
+
+FunctionEnd
+
+Function SetAppNameSitkaProductNameAndVersion
+
+	;MessageBox MB_OK "Top of SetAppNameSitkaProductNameAndVersion"
+
+	;AppNameSitkaProductNameAndVersion = "${APPNAME} $SitkaProductName  ${VERSION}"  
+    StrCpy $AppNameSitkaProductNameAndVersion "${APPNAME} $SitkaProductName  ${VERSION}"
+	;StrCpy $INSTDIR $AppNameSitkaProductNameAndVersion
+	StrCpy $SitkaOverrideInstallDir  "$PROGRAMFILES\$AppNameSitkaProductNameAndVersion"
+	;StrCpy $SitkaOverrideInstallDir  "Doot!"
+	
+	;MessageBox MB_OK "SitkaOverrideInstallDir: $SitkaOverrideInstallDir"	
+FunctionEnd
+
+
+
+
+
+
+
+; Debugging function to show variables related to MUI_STARTMENUPAGE_REGISTRY_KEY
+Function ShowStartMenuValues
+	;MessageBox MB_OK "Top of SetAppNameSitkaProductNameAndVersion"
+	;MessageBox MB_OK "SitkaOverrideInstallDir: $SitkaOverrideInstallDir"	
+FunctionEnd
+
+
+
+
+
+
+
+
+
+
+
+
 
 ; Set the web server port
 Function Port
@@ -656,10 +800,10 @@ FunctionEnd
 ; When port value is changed (realtime)
 Function PortCheck
 
+  ;MessageBox MB_OK "Top of PortCheck"
+
   ; Check for illegal values of $Port and fix immediately
-
   ${NSD_GetText} $PortHWND $Port
-
 
   ; Check for illegal values of $Port
   ${If} $Port = 80
@@ -845,6 +989,9 @@ Section "Main" SectionMain
     SetOutPath "$INSTDIR\wrapper\lib"
     File /a wrapper.jar
     File /a wrapper.dll
+	
+	File /a sqljdbc_auth.dll
+	File /a sqljdbc_xa.dll
 
     CreateDirectory "$INSTDIR\work"
 
@@ -931,13 +1078,13 @@ Section -FinishSection
 
   ; For the Add/Remove programs area
   !define UNINSTALLREGPATH "Software\Microsoft\Windows\CurrentVersion\Uninstall"
-  WriteRegStr HKLM "${UNINSTALLREGPATH}\${APPNAMEANDVERSION}" "DisplayName" "${APPNAMEANDVERSION}"
-  WriteRegStr HKLM "${UNINSTALLREGPATH}\${APPNAMEANDVERSION}" "UninstallString" "$INSTDIR\uninstall.exe"
-  WriteRegStr HKLM "${UNINSTALLREGPATH}\${APPNAMEANDVERSION}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "${UNINSTALLREGPATH}\${APPNAMEANDVERSION}" "DisplayIcon" "$INSTDIR\gs.ico"
-  WriteRegStr HKLM "${UNINSTALLREGPATH}\${APPNAMEANDVERSION}" "HelpLink" "http://geoserver.org"
-  WriteRegDWORD HKLM "${UNINSTALLREGPATH}\${APPNAMEANDVERSION}" "NoModify" "1"
-  WriteRegDWORD HKLM "${UNINSTALLREGPATH}\${APPNAMEANDVERSION}" "NoRepair" "1"
+  WriteRegStr HKLM "${UNINSTALLREGPATH}\$AppNameSitkaProductNameAndVersion" "DisplayName" "$AppNameSitkaProductNameAndVersion"
+  WriteRegStr HKLM "${UNINSTALLREGPATH}\$AppNameSitkaProductNameAndVersion" "UninstallString" "$INSTDIR\uninstall.exe"
+  WriteRegStr HKLM "${UNINSTALLREGPATH}\$AppNameSitkaProductNameAndVersion" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "${UNINSTALLREGPATH}\$AppNameSitkaProductNameAndVersion" "DisplayIcon" "$INSTDIR\gs.ico"
+  WriteRegStr HKLM "${UNINSTALLREGPATH}\$AppNameSitkaProductNameAndVersion" "HelpLink" "http://geoserver.org"
+  WriteRegDWORD HKLM "${UNINSTALLREGPATH}\$AppNameSitkaProductNameAndVersion" "NoModify" "1"
+  WriteRegDWORD HKLM "${UNINSTALLREGPATH}\$AppNameSitkaProductNameAndVersion" "NoRepair" "1"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
@@ -966,14 +1113,14 @@ Section Uninstall
   SetOutPath $TEMP
 
   ;Remove from registry...
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAMEANDVERSION}"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\$AppNameSitkaProductNameAndVersion"
   DeleteRegKey HKLM "SOFTWARE\${APPNAME}"
 
   ; Delete self
   Delete "$INSTDIR\uninstall.exe"
 	
   ; Delete Shortcuts
-  RMDir /r "$SMPROGRAMS\${APPNAMEANDVERSION}"
+  RMDir /r "$SMPROGRAMS\$AppNameSitkaProductNameAndVersion"
 
   ; Delete files/folders
 ;  RMDir /r "$INSTDIR\data_dir" - do not remove this, as it might be the actual application 'data_dir'
