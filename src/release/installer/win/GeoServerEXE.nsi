@@ -29,6 +29,7 @@ RequestExecutionLevel admin
 !include "StrFunc.nsh" ; String functions
 !include "LogicLib.nsh" ; ${If} ${Case} etc.
 !include "nsDialogs.nsh" ; For Custom page layouts (Radio buttons etc)
+!include "TextReplace.nsh" ; For text file search and replace. This is from here: https://nsis.sourceforge.io/TextReplace_plugin
 
 ; Might be the same as !define
 Var STARTMENU_FOLDER
@@ -51,6 +52,12 @@ Var GSUser
 Var GSPass
 Var GSUserHWND
 Var GSPassHWND
+
+Var ServiceUser
+Var ServicePass
+Var ServiceUserHWND
+Var ServicePassHWND
+
 Var IsManual
 Var Manual
 Var Service
@@ -59,7 +66,7 @@ Var PortHWND
 Var SitkaProductName
 var SitkaProductNameHWND
 Var AppNameSitkaProductNameAndVersion
-Var SitkaOverrideInstallDir 
+;Var SitkaOverrideInstallDir 
 
 ;Var CheezWiz
 
@@ -114,7 +121,8 @@ Page custom SitkaProductName								  ; Get Sitka Product Name ("Gemini", "Champ
 ; Sitka attempt/hack:
 ;!define MUI_DIRECTORYPAGE_VARIABLE $INSTDIR 
 ;!define MUI_DIRECTORYPAGE_VARIABLE $TotalCheezBall 
-!define MUI_DIRECTORYPAGE_VARIABLE $SitkaOverrideInstallDir 
+;!define MUI_DIRECTORYPAGE_VARIABLE $SitkaOverrideInstallDir  ; Works, but moving back to $INSTDIR
+!define MUI_DIRECTORYPAGE_VARIABLE $INSTDIR                        
 !insertmacro MUI_PAGE_DIRECTORY                               ; Where to install
 
 ; Original version
@@ -137,9 +145,10 @@ Page custom GetJRE                                            ; Look for exisitn
 Page custom JRE JRELeave                                      ; Set the JRE
 Page custom GetDataDir                                        ; Look for existing data_dir
 Page custom DataDir DataDirLeave                              ; Set the data directory
-Page custom Creds                                             ; Set admin/password (if new data_dir)
+Page custom GeoserverCreds                                    ; Set admin/password for Geoserver (if new data_dir)
 Page custom Port                                              ; Set Jetty web server port
 Page custom InstallType InstallTypeLeave                      ; Manual/Service
+Page custom ServiceCreds									  ; Set service user/password for Windows service (if running as service)
 Page custom Ready                                             ; Summary page
 !insertmacro MUI_PAGE_INSTFILES                               ; Actually do the install
 !insertmacro MUI_PAGE_FINISH                                  ; Done
@@ -161,8 +170,15 @@ LangString TEXT_TYPE_TITLE ${LANG_ENGLISH} "Type of Installation"
 LangString TEXT_TYPE_SUBTITLE ${LANG_ENGLISH} "Select the type of installation"
 LangString TEXT_READY_TITLE ${LANG_ENGLISH} "Ready to Install"
 LangString TEXT_READY_SUBTITLE ${LANG_ENGLISH} "GeoServer is ready to be installed"
-LangString TEXT_CREDS_TITLE ${LANG_ENGLISH} "GeoServer Administrator"
-LangString TEXT_CREDS_SUBTITLE ${LANG_ENGLISH} "Set administrator credentials"
+
+
+LangString TEXT_GEOSERVER_CREDS_TITLE ${LANG_ENGLISH} "GeoServer Administrator"
+LangString TEXT_GEOSERVER_CREDS_SUBTITLE ${LANG_ENGLISH} "Set administrator credentials"
+
+LangString TEXT_SERVICE_CREDS_TITLE ${LANG_ENGLISH} "Windows Service Credentials Administrator"
+LangString TEXT_SERVICE_CREDS_SUBTITLE ${LANG_ENGLISH} "Set credentials for Windows Service"
+
+
 LangString TEXT_PORT_TITLE ${LANG_ENGLISH} "GeoServer Web Server Port"
 LangString TEXT_PORT_SUBTITLE ${LANG_ENGLISH} "Set the port that GeoServer will respond on"
 
@@ -186,7 +202,7 @@ Function .onInit
   
   ;StrCpy $TotalCheezBall "Total Cheez Ball"
   ;StrCpy $SitkaOverrideInstallDir  "$PROGRAMFILES\${APPNAMEANDVERSION}"
-  StrCpy $SitkaOverrideInstallDir  "Another Cheez Ball"
+  ;StrCpy $SitkaOverrideInstallDir  "Another Cheez Ball"
   
   ;StrCpy $CheezWiz "Cheezy Wiz"
 		
@@ -417,6 +433,8 @@ FunctionEnd
 ; Runs before the page is loaded to ensure that the better value (if any) is always reset
 Function GetDataDir
 
+  MessageBox MB_OK "Top of GetDataDir"	
+
   ${If} $DataDir == ""
     Call FindDataDirPath
     Pop $DataDir
@@ -426,6 +444,8 @@ FunctionEnd
 
 ; Data_dir page display
 Function DataDir
+	
+  MessageBox MB_OK "Top of DataDir"	
 	
   !insertmacro MUI_HEADER_TEXT "$(TEXT_DATADIR_TITLE)" "$(TEXT_DATADIR_SUBTITLE)"
 
@@ -583,6 +603,8 @@ FunctionEnd
 ; When done, set variable permanently
 Function DataDirLeave
 
+  MessageBox MB_OK "Top of DataDirLeave"
+
   ${If} $DataDirType == 0 ; use the default
     StrCpy $DataDir "$INSTDIR\data_dir"
   ${ElseIf} $DataDirType == 1
@@ -604,11 +626,11 @@ Function DataDirLeave
 FunctionEnd
 
 ; Will build a page to input default GS admin creds
-Function Creds
+Function GeoserverCreds
 
-  StrCmp $IsExistingDataDir 1 SkipCreds
+  StrCmp $IsExistingDataDir 1 SkipGeoserverCreds
   
-  !insertmacro MUI_HEADER_TEXT "$(TEXT_CREDS_TITLE)" "$(TEXT_CREDS_SUBTITLE)"
+  !insertmacro MUI_HEADER_TEXT "$(TEXT_GEOSERVER_CREDS_TITLE)" "$(TEXT_GEOSERVER_CREDS_SUBTITLE)"
   nsDialogs::Create 1018
 
   ; Populates defaults on first display, and resets to default user blanked any of the values
@@ -625,23 +647,23 @@ Function Creds
   ${NSD_CreateLabel} 20u 40u 40u 14u "Username"  
   ${NSD_CreateText} 70u 38u 50u 14u $GSUser
   Pop $GSUserHWND
-  ${NSD_OnChange} $GSUserHWND UsernameCheck
+  ${NSD_OnChange} $GSUserHWND GeoserverUsernameCheck
 
   ${NSD_CreateLabel} 20u 60u 40u 14u "Password" 
   ${NSD_CreateText} 70u 58u 50u 14u $GSPass
   Pop $GSPassHWND
-  ${NSD_OnChange} $GSPassHWND PasswordCheck
+  ${NSD_OnChange} $GSPassHWND GeoserverPasswordCheck
 
   nsDialogs::Show
 
-  SkipCreds: ; if data dir exists, we wouldn't want to change creds
+  SkipGeoserverCreds: ; if data dir exists, we wouldn't want to change creds
    
 FunctionEnd
 
 ; When username value is changed (realtime)
-Function UsernameCheck
+Function GeoserverUsernameCheck
 
-  MessageBox MB_OK "Top of UsernameCheck"
+  ;MessageBox MB_OK "Top of GeoserverUsernameCheck"
 
   ; Check for illegal values of $GSUser and fix immediately
   ${NSD_GetText} $GSUserHWND $GSUser
@@ -660,7 +682,9 @@ Function UsernameCheck
 FunctionEnd
 
 ; When password value is changed (realtime)
-Function PasswordCheck
+Function GeoserverPasswordCheck
+
+  ;MessageBox MB_OK "Top of GeoserverPasswordCheck"
 
   ; Check for illegal values of $GSPass and fix immediately
   ${NSD_GetText} $GSPassHWND $GSPass
@@ -682,6 +706,85 @@ FunctionEnd
 
 
 
+
+
+Function ServiceCreds
+
+  ; If we are running as manual (not a service), no need to ask for Service credentials
+  StrCmp $IsManual 1 SkipServiceCreds
+  
+  !insertmacro MUI_HEADER_TEXT "$(TEXT_SERVICE_CREDS_TITLE)" "$(TEXT_SERVICE_CREDS_SUBTITLE)"
+  nsDialogs::Create 1018
+
+  ; Populates defaults on first display, and resets to default user blanked any of the values
+  StrCmp $ServiceUser "" 0 +3
+    StrCpy $ServiceUser "SITKA\$SitkaProductNameGeoLocal"
+    StrCpy $ServicePass "password_text_here"
+  StrCmp $ServicePass "" 0 +3
+    StrCpy $ServiceUser "SITKA\$SitkaProductNameGeoLocal"
+    StrCpy $ServicePass "password_text_here"
+
+  ;Syntax: ${NSD_*} x y width height text
+  ${NSD_CreateLabel} 0 0 100% 36u "Set the username and password for the Geoserver $SitkaProductName Service."
+
+  ${NSD_CreateLabel} 20u 40u 40u 14u "Username"  
+  ${NSD_CreateText} 70u 38u 150u 14u $ServiceUser
+  Pop $ServiceUserHWND
+  ${NSD_OnChange} $ServiceUserHWND ServiceUsernameCheck
+
+  ${NSD_CreateLabel} 20u 60u 40u 14u "Password" 
+  ${NSD_CreateText} 70u 58u 150u 14u $ServicePass
+  Pop $ServicePassHWND
+  ${NSD_OnChange} $ServicePassHWND ServicePasswordCheck
+
+  nsDialogs::Show
+
+  SkipServiceCreds: 
+   
+FunctionEnd
+
+
+; When username value is changed (realtime)
+Function ServiceUsernameCheck
+
+  MessageBox MB_OK "Top of ServiceUsernameCheck"
+
+  ; Check for illegal values of $ServiceUser and fix immediately
+  ${NSD_GetText} $ServiceUserHWND $ServiceUser
+  StrCmp $ServiceUser "" NoContinue Continue
+
+  NoContinue:
+    GetDlgItem $0 $HWNDPARENT 1 ; Next
+    EnableWindow $0 0 ; Disable
+    Goto End
+  Continue:
+  StrCmp $ServicePass "" +3 0 ; must make sure neither is blank
+    GetDlgItem $0 $HWNDPARENT 1 ; Next
+    EnableWindow $0 1 ; Enable
+  End:
+
+FunctionEnd
+
+; When password value is changed (realtime)
+Function ServicePasswordCheck
+
+  MessageBox MB_OK "Top of ServicePasswordCheck"
+
+  ; Check for illegal values of $ServicePass and fix immediately
+  ${NSD_GetText} $ServicePassHWND $ServicePass
+  StrCmp $GSPass "" NoContinue Continue
+
+  NoContinue:
+    GetDlgItem $0 $HWNDPARENT 1 ; Next
+    EnableWindow $0 0 ; Disable
+    Goto End
+  Continue:
+  StrCmp $ServiceUser "" +3 0 ; must make sure neither is blank
+    GetDlgItem $0 $HWNDPARENT 1 ; Next
+    EnableWindow $0 1 ; Enable
+  End:
+
+FunctionEnd
 
 
 
@@ -740,27 +843,13 @@ Function SetAppNameSitkaProductNameAndVersion
 
 	;MessageBox MB_OK "Top of SetAppNameSitkaProductNameAndVersion"
 
-	;AppNameSitkaProductNameAndVersion = "${APPNAME} $SitkaProductName  ${VERSION}"  
-    StrCpy $AppNameSitkaProductNameAndVersion "${APPNAME} $SitkaProductName  ${VERSION}"
-	;StrCpy $INSTDIR $AppNameSitkaProductNameAndVersion
-	StrCpy $SitkaOverrideInstallDir  "$PROGRAMFILES\$AppNameSitkaProductNameAndVersion"
-	;StrCpy $SitkaOverrideInstallDir  "Doot!"
-	
+    StrCpy $AppNameSitkaProductNameAndVersion "${APPNAME} ${VERSION} $SitkaProductName"
+	; Works, but trying to move back to $INSTDIR
+	; StrCpy $SitkaOverrideInstallDir  "$PROGRAMFILES\$AppNameSitkaProductNameAndVersion"
+	StrCpy $INSTDIR "$PROGRAMFILES\$AppNameSitkaProductNameAndVersion"
+		
 	;MessageBox MB_OK "SitkaOverrideInstallDir: $SitkaOverrideInstallDir"	
 FunctionEnd
-
-
-
-
-
-
-
-; Debugging function to show variables related to MUI_STARTMENUPAGE_REGISTRY_KEY
-Function ShowStartMenuValues
-	;MessageBox MB_OK "Top of SetAppNameSitkaProductNameAndVersion"
-	;MessageBox MB_OK "SitkaOverrideInstallDir: $SitkaOverrideInstallDir"	
-FunctionEnd
-
 
 
 
@@ -893,15 +982,21 @@ Function Ready
     ${NSD_CreateLabel} 40% 85u 60% 24u "Using default data directory:$\r$\n$DataDir"
   ${EndIf}
 
-  ; Creds
+  ; GeoserverCreds
   ${If} $IsExistingDataDir == 1
     ${NSD_CreateLabel} 10u 112u 35% 24u "Port:"
     ${NSD_CreateLabel} 40% 112u 60% 24u "$Port"
   ${Else}
-    ${NSD_CreateLabel} 10u 112u 35% 24u "Username / Password / Port:"
+    ${NSD_CreateLabel} 10u 112u 35% 24u "GS Username / Password / Port:"
     ${NSD_CreateLabel} 40% 112u 60% 24u "$GSUser / $GSPass / $Port"
   ${EndIf}
-
+  
+  ; ServiceCreds
+  ${If} $IsManual == 0
+    ${NSD_CreateLabel} 10u 120u 35% 24u "Service Username / Password:"
+    ${NSD_CreateLabel} 40% 120u 60% 24u "$ServiceUser / $ServicePass"
+  ${EndIf}  
+  
   nsDialogs::Show
 
 FunctionEnd
@@ -961,12 +1056,12 @@ Section "Main" SectionMain
   File /r data_dir
   ${EndIf}
 
-
   ; Write environment variables
   Push "JAVA_HOME"
   Push "$JavaHome"
   Call WriteEnvVar
 
+  ; Omit entirely for Sitka installers?? I think probably so.
   Push "GEOSERVER_HOME"
   Push "$INSTDIR"
   Call WriteEnvVar
@@ -981,9 +1076,28 @@ Section "Main" SectionMain
     File /a wrapper.exe
     File /a wrapper-server-license.txt
 
+	; Output directory for wrapper.conf.* files
     CreateDirectory "$INSTDIR\wrapper"
     SetOutPath "$INSTDIR\wrapper"
-    File /a wrapper.conf
+
+	; Wrapper.conf
+    File /a /oname=wrapper.conf wrapper.conf.TEMPLATE
+	
+	; Account and password HARD CODED until we are sure wrapper.conf completely works!
+	
+	; Replace values in wrapper.conf
+	;${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "Wrapper Properties" "TEST TEST TEST HAS BEEN REPLACED" "/S=1 /C=1 /AO=1" $0
+	
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@GeoserverDataDir@@" "$DataDir" "/S=1 /C=1 /AO=1" $0
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@GeoserverPort@@" "$Port" "/S=1 /C=1 /AO=1" $0
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@SitkaProductName@@" "$SitkaProductName" "/S=1 /C=1 /AO=1" $0
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@ServiceAccountName@@" "$ServiceUser" "/S=1 /C=1 /AO=1" $0
+
+	; Password file for wrapper.conf
+	File /a /oname=wrapper.conf.servicepassword wrapper.conf.servicepassword.TEMPLATE
+	
+	; Replace values in wrapper.conf pasword file. This file is transient! See below.
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf.servicepassword" "$INSTDIR\wrapper\wrapper.conf.servicepassword" "@@ServiceAccountPassword@@" "$ServicePass" "/S=1 /C=1 /AO=1" $0	
 
     CreateDirectory "$INSTDIR\wrapper\lib"
     SetOutPath "$INSTDIR\wrapper\lib"
@@ -998,7 +1112,10 @@ Section "Main" SectionMain
     Call SetServiceMarlinRenderer
     
     ; Install the service (and start it)
-    nsExec::Exec "$INSTDIR\wrapper.exe -it ./wrapper/wrapper.conf wrapper.app.parameter.4=jetty.port=$Port"
+    nsExec::Exec "$INSTDIR\wrapper.exe -it ./wrapper/wrapper.conf"
+	
+	; Remove the plaintext password file, which we should no longer need now that we've installed the service
+	Delete $INSTDIR\wrapper\wrapper.conf.servicepassword
 
   ${EndIf}
 
@@ -1007,8 +1124,8 @@ Section "Main" SectionMain
     AccessControl::GrantOnFile "$INSTDIR\logs" "(S-1-5-32-545)" "FullAccess"
     AccessControl::GrantOnFile "$INSTDIR\data_dir" "(S-1-5-32-545)" "FullAccess"
   ${ElseIf} $IsManual == 0 ; service
-    AccessControl::GrantOnFile "$INSTDIR\logs" "NT AUTHORITY\Network Service" "FullAccess"
-    AccessControl::GrantOnFile "$DataDir" "NT AUTHORITY\Network Service" "FullAccess"
+    AccessControl::GrantOnFile "$INSTDIR\logs" "@@ServiceAccountName@@" "FullAccess"
+    AccessControl::GrantOnFile "$DataDir" "@@ServiceAccountName@@" "FullAccess"
   ${EndIf}
 
 SectionEnd
@@ -1017,15 +1134,15 @@ SectionEnd
 Section -FinishSection
 
   ; New users.properties file is created here
-  StrCmp $IsExistingDataDir 1 NoWriteCreds WriteCreds
+  StrCmp $IsExistingDataDir 1 NoWriteGeoserverCreds WriteGeoserverCreds
 
-  WriteCreds:
+  WriteGeoserverCreds:
     Delete "$DataDir\security\users.properties"
     FileOpen $R9 "$DataDir\security\users.properties" w
     FileWrite $R9 "$GSUser=$GSPass,ROLE_ADMINISTRATOR"
     FileClose $R9
 	
-  NoWriteCreds:
+  NoWriteGeoserverCreds:
 
   ; Startup and Shutdown batch files
   CreateDirectory "$INSTDIR\bin"
