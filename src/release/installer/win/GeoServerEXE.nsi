@@ -64,11 +64,10 @@ Var Service
 Var Port
 Var PortHWND
 Var SitkaProductName
-var SitkaProductNameHWND
+Var SitkaProductNameHWND
 Var AppNameSitkaProductNameAndVersion
-;Var SitkaOverrideInstallDir 
+Var SitkaWindowsServiceName
 
-;Var CheezWiz
 
 ;Version Information (Version tab for EXE properties)
 ;VIProductVersion ${LONGVERSION}
@@ -90,7 +89,7 @@ Var AppNameSitkaProductNameAndVersion
 ; This is where the installer stores the last install directory used.
 ; Since this directory varies dynamically depending on which Sitka Product is being installed,
 ; we can't take advantage of this without a lot of work and/or confusion. Better that the user picks,
-; each & every time, and that we give a resonable default instead ("GeoServer Gemin v1.6.4" or similar)
+; each & every time, and that we give a resonable default instead ("GeoServer v1.6.4 Gemini" or similar)
 ;
 ; -- SLG 11/18/2019
 ;Start Menu Folder Page Configuration
@@ -171,13 +170,11 @@ LangString TEXT_TYPE_SUBTITLE ${LANG_ENGLISH} "Select the type of installation"
 LangString TEXT_READY_TITLE ${LANG_ENGLISH} "Ready to Install"
 LangString TEXT_READY_SUBTITLE ${LANG_ENGLISH} "GeoServer is ready to be installed"
 
-
 LangString TEXT_GEOSERVER_CREDS_TITLE ${LANG_ENGLISH} "GeoServer Administrator"
 LangString TEXT_GEOSERVER_CREDS_SUBTITLE ${LANG_ENGLISH} "Set administrator credentials"
 
 LangString TEXT_SERVICE_CREDS_TITLE ${LANG_ENGLISH} "Windows Service Credentials Administrator"
 LangString TEXT_SERVICE_CREDS_SUBTITLE ${LANG_ENGLISH} "Set credentials for Windows Service"
-
 
 LangString TEXT_PORT_TITLE ${LANG_ENGLISH} "GeoServer Web Server Port"
 LangString TEXT_PORT_SUBTITLE ${LANG_ENGLISH} "Set the port that GeoServer will respond on"
@@ -385,11 +382,15 @@ Function JRELeave
 
 FunctionEnd
 
-; Find the %GEOSERVER_DATA_DIR% used on the system, and put the result on the top of the stack
+; Find the %GEOSERVER_DATA_DIR_[SitkaProductName]% ("GEOSERVER_DATA_DIR_GEMINI" for example)
+; used on the system, and put the result on the top of the stack
 Function FindDataDirPath
 
+  MessageBox MB_OK "Top of FindDataDirPath"
+  MessageBox MB_OK "About to look for GEOSERVER_DATA_DIR_$SitkaProductName"
+
   ClearErrors
-  ReadEnvStr $1 GEOSERVER_DATA_DIR
+  ReadEnvStr $1 GEOSERVER_DATA_DIR_$SitkaProductName
   IfFileExists $1 NoErrors Errors
 
   NoErrors:
@@ -404,6 +405,8 @@ Function FindDataDirPath
     Goto End
 
   End:
+    MessageBox MB_OK "DataDirType : $DataDirType  -- $1"
+	
     ClearErrors
     Push $1
 
@@ -747,7 +750,7 @@ FunctionEnd
 ; When username value is changed (realtime)
 Function ServiceUsernameCheck
 
-  MessageBox MB_OK "Top of ServiceUsernameCheck"
+  ;MessageBox MB_OK "Top of ServiceUsernameCheck"
 
   ; Check for illegal values of $ServiceUser and fix immediately
   ${NSD_GetText} $ServiceUserHWND $ServiceUser
@@ -768,7 +771,7 @@ FunctionEnd
 ; When password value is changed (realtime)
 Function ServicePasswordCheck
 
-  MessageBox MB_OK "Top of ServicePasswordCheck"
+  ;MessageBox MB_OK "Top of ServicePasswordCheck"
 
   ; Check for illegal values of $ServicePass and fix immediately
   ${NSD_GetText} $ServicePassHWND $ServicePass
@@ -1083,14 +1086,17 @@ Section "Main" SectionMain
 	; Wrapper.conf
     File /a /oname=wrapper.conf wrapper.conf.TEMPLATE
 	
-	; Account and password HARD CODED until we are sure wrapper.conf completely works!
+	; For now, service name is the same as this:
+	StrCpy $SitkaWindowsServiceName $AppNameSitkaProductNameAndVersion
 	
+	# FOR TESTING
+    #MessageBox MB_OK|MB_ICONEXCLAMATION "SitkaWindowsServiceName: $SitkaWindowsServiceName"  	
+		
 	; Replace values in wrapper.conf
-	;${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "Wrapper Properties" "TEST TEST TEST HAS BEEN REPLACED" "/S=1 /C=1 /AO=1" $0
-	
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@GeoserverDataDir@@" "$DataDir" "/S=1 /C=1 /AO=1" $0
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@GeoserverPort@@" "$Port" "/S=1 /C=1 /AO=1" $0
-	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@SitkaProductName@@" "$SitkaProductName" "/S=1 /C=1 /AO=1" $0
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@SitkaProductName@@" "$SitkaProductName" "/S=1 /C=1 /AO=1" $0	
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@SitkaWindowsServiceName@@" "$SitkaWindowsServiceName" "/S=1 /C=1 /AO=1" $0		
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@ServiceAccountName@@" "$ServiceUser" "/S=1 /C=1 /AO=1" $0
 
 	; Password file for wrapper.conf
@@ -1098,6 +1104,10 @@ Section "Main" SectionMain
 	
 	; Replace values in wrapper.conf pasword file. This file is transient! See below.
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf.servicepassword" "$INSTDIR\wrapper\wrapper.conf.servicepassword" "@@ServiceAccountPassword@@" "$ServicePass" "/S=1 /C=1 /AO=1" $0	
+	
+	; Although we have been trying to get the password into the exterior file shown above, during testing we also have
+	; put it in the wrapper.conf. This line should be commented out once no longer needed
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@ServiceAccountPassword@@" "$ServicePass" "/S=1 /C=1 /AO=1" $0	
 
     CreateDirectory "$INSTDIR\wrapper\lib"
     SetOutPath "$INSTDIR\wrapper\lib"
@@ -1113,9 +1123,18 @@ Section "Main" SectionMain
     
     ; Install the service (and start it)
     nsExec::Exec "$INSTDIR\wrapper.exe -it ./wrapper/wrapper.conf"
-	
+		
 	; Remove the plaintext password file, which we should no longer need now that we've installed the service
 	Delete $INSTDIR\wrapper\wrapper.conf.servicepassword
+
+	; Alternate hack - just scrub wrapper.conf directly. I do this only after several hours of blind & desperate hacking to
+	; get the wrapper.conf.servicepassword working, which it did not seem to be. (Is this another "pro only" feature?) -- SLG
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "wrapper.ntservice.password=$ServicePass" "#wrapper.ntservice.password=[PASSWORD_SCRUBBED_AFTER_INSTALLATION]" "/S=1 /C=1 /AO=1" $0	
+
+	; Because "DELAY_START" doesn't seem to work in wrapper.conf, we use sc.exe to manually set the service to auto delayed start. A hassle, but it does work.
+	; MessageBox MB_OK|MB_ICONEXCLAMATION 'sc.exe config "$SitkaWindowsServiceName" start=delayed-auto' 
+	nsExec::Exec 'sc.exe config "$SitkaWindowsServiceName" start=delayed-auto'
+		
 
   ${EndIf}
 
@@ -1213,15 +1232,16 @@ Section Uninstall
   ; Stop
   IfFileExists "$INSTDIR\wrapper.exe" StopService StopManual
   StopService:
+    MessageBox MB_OK|MB_ICONEXCLAMATION "StopService"    
     ExecWait "$INSTDIR\wrapper.exe -r wrapper/wrapper.conf"
     Sleep 4000 ; to make sure it's fully stopped
     RMDir /r "$INSTDIR\wrapper" ; while we're here
     Goto Continue
   StopManual:
+	MessageBox MB_OK|MB_ICONEXCLAMATION "StopManual"      
     ExecWait "$INSTDIR\bin\shutdown.bat"
     Sleep 4000 ; to make sure it's fully stopped
   Continue:
-
 
   ; Remove env var
   Push GEOSERVER_HOME
@@ -1240,7 +1260,9 @@ Section Uninstall
   RMDir /r "$SMPROGRAMS\$AppNameSitkaProductNameAndVersion"
 
   ; Delete files/folders
-;  RMDir /r "$INSTDIR\data_dir" - do not remove this, as it might be the actual application 'data_dir'
+  ; The original version of this say " - do not remove this, as it might be the actual application 'data_dir'"
+  ; But I don't understand the risk here, and really want it cleaned up, so I'm doing it anyway. -- SLG
+  RMDir /r "$INSTDIR\data_dir"
   RMDir /r "$INSTDIR\bin"
   RMDir /r "$INSTDIR\etc"
   RMDir /r "$INSTDIR\modules"
