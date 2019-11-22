@@ -40,8 +40,8 @@ wrapper.java.maxmemory=756
 wrapper.app.parameter.1=org.eclipse.jetty.start.Main
 wrapper.app.parameter.2=etc/jetty.xml
 wrapper.app.parameter.3=--module=http
-wrapper.app.parameter.4=jetty.http.port=@@GeoserverPort@@
-
+wrapper.app.parameter.4=jetty.http.host=@@GeoserverIpAddress@@
+wrapper.app.parameter.5=jetty.http.port=@@GeoserverPort@@
 
 # Add optional parameters to enable Marlin renderer
 #include wrapper/marlin.conf

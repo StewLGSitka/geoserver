@@ -61,6 +61,8 @@ Var ServicePassHWND
 Var IsManual
 Var Manual
 Var Service
+Var IPAddress
+Var IPAddressHWND
 Var Port
 Var PortHWND
 Var SitkaProductName
@@ -145,7 +147,7 @@ Page custom JRE JRELeave                                      ; Set the JRE
 Page custom GetDataDir                                        ; Look for existing data_dir
 Page custom DataDir DataDirLeave                              ; Set the data directory
 Page custom GeoserverCreds                                    ; Set admin/password for Geoserver (if new data_dir)
-Page custom Port                                              ; Set Jetty web server port
+Page custom AddressAndPort                                    ; Set Jetty web server IP address and port
 Page custom InstallType InstallTypeLeave                      ; Manual/Service
 Page custom ServiceCreds									  ; Set service user/password for Windows service (if running as service)
 Page custom Ready                                             ; Summary page
@@ -176,8 +178,11 @@ LangString TEXT_GEOSERVER_CREDS_SUBTITLE ${LANG_ENGLISH} "Set administrator cred
 LangString TEXT_SERVICE_CREDS_TITLE ${LANG_ENGLISH} "Windows Service Credentials Administrator"
 LangString TEXT_SERVICE_CREDS_SUBTITLE ${LANG_ENGLISH} "Set credentials for Windows Service"
 
-LangString TEXT_PORT_TITLE ${LANG_ENGLISH} "GeoServer Web Server Port"
-LangString TEXT_PORT_SUBTITLE ${LANG_ENGLISH} "Set the port that GeoServer will respond on"
+LangString TEXT_IPADDRESS_AND_PORT_TITLE ${LANG_ENGLISH} "GeoServer Web Server IP Address and port"
+LangString TEXT_IPADDRESS_AND_PORT_SUBTITLE ${LANG_ENGLISH} "Set the IP Address and port that GeoServer will respond on"
+
+;LangString TEXT_PORT_TITLE ${LANG_ENGLISH} "GeoServer Web Server Port"
+;LangString TEXT_PORT_SUBTITLE ${LANG_ENGLISH} "Set the port that GeoServer will respond on"
 
 LangString TEXT_SITKA_PRODUCT_NAME_TITLE ${LANG_ENGLISH} "Sitka Product Name"
 LangString TEXT_SITKA_PRODUCT_NAME_SUBTITLE ${LANG_ENGLISH} "Set the Sitka product name for this installation of GeoServer (Gemini, Reclamation, etc.)"
@@ -952,29 +957,78 @@ FunctionEnd
 
 
 
-; Set the web server port
-Function Port
+; Set the web server IP Address and port
+Function AddressAndPort
 
-  !insertmacro MUI_HEADER_TEXT "$(TEXT_PORT_TITLE)" "$(TEXT_PORT_SUBTITLE)"
+  !insertmacro MUI_HEADER_TEXT "$(TEXT_IPADDRESS_AND_PORT_TITLE)" "$(TEXT_IPADDRESS_AND_PORT_SUBTITLE)"
   nsDialogs::Create 1018
 
   ; Populates defaults on first display, and resets to default user blanked any of the values
   StrCmp $Port "" 0 +2
     StrCpy $Port "8080"
+	
+  StrCmp $IPAddress "" 0 +2
+    StrCpy $IPAddress "127.0.0.1"	
 
   ;Syntax: ${NSD_*} x y width height text
-  ${NSD_CreateLabel} 0 0 100% 36u "Set the web server port that GeoServer will respond on."
+  ${NSD_CreateLabel} 0 0 100% 36u "Set the web server IP address and port that GeoServer will respond on."
 
-  ${NSD_CreateLabel} 20u 40u 20u 14u "Port"  
-  ${NSD_CreateNumber} 50u 38u 50u 14u $Port
+  ; IP Address
+  ${NSD_CreateLabel} 20u 40u 40u 14u "IP Address"  
+  ${NSD_CreateText} 70u 38u 50u 14u $IPAddress   
+  Pop $IPAddressHWND
+  ${NSD_OnChange} $IPAddressHWND IPAddressCheck
+
+  ${NSD_CreateLabel} 140u 40u 120u 14u "Format is xxx.xxx.xxx.xxx" 
+
+  ; Port controls
+  ${NSD_CreateLabel} 20u 60u 40u 14u "Port"    
+  ${NSD_CreateNumber} 70u 58u 50u 14u $Port  
   Pop $PortHWND
   ${NSD_OnChange} $PortHWND PortCheck
 
-  ${NSD_CreateLabel} 110u 40u 120u 14u "Valid range is 80, 1024-65535." 
+  ${NSD_CreateLabel} 140u 60u 120u 14u "Valid range is 80, 1024-65535." 
 
   nsDialogs::Show
 
 FunctionEnd
+
+
+
+
+; When port value is changed (realtime)
+Function IPAddressCheck
+
+  ;MessageBox MB_OK "Top of IPAddressCheck"
+
+  ; Check for illegal values of $IPAddress and fix immediately
+  ${NSD_GetText} $IPAddressHWND $IPAddress
+
+  ; Does nothing yet. Surely could.
+
+;  ${If} $Port = 80
+;    GetDlgItem $0 $HWNDPARENT 1 ; Next
+;    EnableWindow $0 1 ; Enable
+;  ${Else}  
+;     ${If} $Port < 1024        ; Too low
+;     ${OrIf} $Port > 65535     ; Too high
+;      GetDlgItem $0 $HWNDPARENT 1 ; Next
+;      EnableWindow $0 0 ; Disable
+;     ${Else}
+;      GetDlgItem $0 $HWNDPARENT 1 ; Next
+;      EnableWindow $0 1 ; Enable
+;     ${EndIf}
+;   ${EndIf}
+   
+FunctionEnd
+
+
+
+
+
+
+
+
 
 ; When port value is changed (realtime)
 Function PortCheck
@@ -1000,6 +1054,17 @@ Function PortCheck
    ${EndIf}
    
 FunctionEnd
+
+
+
+
+
+
+
+
+
+
+
 
 ; Manual vs service selection
 Function InstallType
@@ -1181,6 +1246,7 @@ Section "Main" SectionMain
 		
 	; Replace values in wrapper.conf
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@GeoserverDataDir@@" "$DataDir" "/S=1 /C=1 /AO=1" $0
+	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@GeoserverIpAddress@@" "$IPAddress" "/S=1 /C=1 /AO=1" $0
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@GeoserverPort@@" "$Port" "/S=1 /C=1 /AO=1" $0
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@SitkaProductName@@" "$SitkaProductName" "/S=1 /C=1 /AO=1" $0	
 	${textreplace::ReplaceInFile} "$INSTDIR\wrapper\wrapper.conf" "$INSTDIR\wrapper\wrapper.conf" "@@SitkaWindowsServiceName@@" "$SitkaWindowsServiceName" "/S=1 /C=1 /AO=1" $0		
