@@ -711,6 +711,67 @@ FunctionEnd
 
 
 
+
+
+
+; TrimWhitespace
+;   Removes leading & trailing whitespace from a string
+; Usage:
+;   Push 
+;   Call Trim
+;   Pop 
+Function TrimWhitespace
+	Exch $R1 ; Original string
+	Push $R2
+ 
+Loop:
+	StrCpy $R2 "$R1" 1
+	StrCmp "$R2" " " TrimLeft
+	StrCmp "$R2" "$\r" TrimLeft
+	StrCmp "$R2" "$\n" TrimLeft
+	StrCmp "$R2" "$\t" TrimLeft
+	GoTo Loop2
+TrimLeft:	
+	StrCpy $R1 "$R1" "" 1
+	Goto Loop
+ 
+Loop2:
+	StrCpy $R2 "$R1" 1 -1
+	StrCmp "$R2" " " TrimRight
+	StrCmp "$R2" "$\r" TrimRight
+	StrCmp "$R2" "$\n" TrimRight
+	StrCmp "$R2" "$\t" TrimRight
+	GoTo Done
+TrimRight:	
+	StrCpy $R1 "$R1" -1
+	Goto Loop2
+ 
+Done:
+	Pop $R2
+	Exch $R1
+FunctionEnd
+
+; Convenience function
+; Usage:
+; ${TrimWhitespace} $trimmedString $originalString
+!define TrimWhitespace "!insertmacro TrimWhitespace"
+ 
+!macro TrimWhitespace ResultVar String
+  Push "${String}"
+  Call TrimWhitespace
+  Pop "${ResultVar}"
+!macroend
+
+
+
+
+
+
+
+
+
+
+
 Function ServiceCreds
 
   ; If we are running as manual (not a service), no need to ask for Service credentials
@@ -733,12 +794,12 @@ Function ServiceCreds
   ${NSD_CreateLabel} 20u 40u 40u 14u "Username"  
   ${NSD_CreateText} 70u 38u 150u 14u $ServiceUser
   Pop $ServiceUserHWND
-  ${NSD_OnChange} $ServiceUserHWND ServiceUsernameCheck
+  ${NSD_OnChange} $ServiceUserHWND ServiceUsernameAndPasswordCheck
 
   ${NSD_CreateLabel} 20u 60u 40u 14u "Password" 
   ${NSD_CreateText} 70u 58u 150u 14u $ServicePass
   Pop $ServicePassHWND
-  ${NSD_OnChange} $ServicePassHWND ServicePasswordCheck
+  ${NSD_OnChange} $ServicePassHWND ServiceUsernameAndPasswordCheck
 
   nsDialogs::Show
 
@@ -747,47 +808,64 @@ Function ServiceCreds
 FunctionEnd
 
 
-; When username value is changed (realtime)
-Function ServiceUsernameCheck
 
-  ;MessageBox MB_OK "Top of ServiceUsernameCheck"
 
-  ; Check for illegal values of $ServiceUser and fix immediately
+
+; When username or password value is changed (realtime)
+Function ServiceUsernameAndPasswordCheck
+
+  ;MessageBox MB_OK "Top of ServiceUsernameAndPasswordCheck"
+
+  Var /Global ServiceUsernameTrimmed
+  Var /Global ServicePasswordTrimmed  
+  
+  ; Get Service Username
   ${NSD_GetText} $ServiceUserHWND $ServiceUser
-  StrCmp $ServiceUser "" NoContinue Continue
-
-  NoContinue:
-    GetDlgItem $0 $HWNDPARENT 1 ; Next
-    EnableWindow $0 0 ; Disable
-    Goto End
-  Continue:
-  StrCmp $ServicePass "" +3 0 ; must make sure neither is blank
-    GetDlgItem $0 $HWNDPARENT 1 ; Next
-    EnableWindow $0 1 ; Enable
-  End:
-
-FunctionEnd
-
-; When password value is changed (realtime)
-Function ServicePasswordCheck
-
-  ;MessageBox MB_OK "Top of ServicePasswordCheck"
-
-  ; Check for illegal values of $ServicePass and fix immediately
+  ; Whitespace trimmed Username
+  ${TrimWhitespace} $ServiceUsernameTrimmed $ServiceUser    
+  
+  ; Get Service Password
   ${NSD_GetText} $ServicePassHWND $ServicePass
-  StrCmp $GSPass "" NoContinue Continue
+  ; Whitespace trimmed Password
+  ${TrimWhitespace} $ServicePasswordTrimmed $ServicePass  
 
+  ; Start a series of checks that exit to NoContinue if a problem is found,
+  ; otherwise advancing on to the next check.
+  StrCmp $ServiceUsernameTrimmed $ServiceUser CheckPasswordTrim NoContinue 
+  CheckPasswordTrim:  
+  StrCmp $ServicePasswordTrimmed $ServicePass CheckBlankUsername NoContinue  
+  CheckBlankUsername:
+  StrCmp $ServiceUser "" NoContinue CheckBlankPassword
+  CheckBlankPassword:
+  StrCmp $ServicePass "" NoContinue Continue
+   
   NoContinue:
-    GetDlgItem $0 $HWNDPARENT 1 ; Next
-    EnableWindow $0 0 ; Disable
+    GetDlgItem $0 $HWNDPARENT 1 ; Next button
+    EnableWindow $0 0 ; Disable next button
     Goto End
   Continue:
-  StrCmp $ServiceUser "" +3 0 ; must make sure neither is blank
-    GetDlgItem $0 $HWNDPARENT 1 ; Next
-    EnableWindow $0 1 ; Enable
+    GetDlgItem $0 $HWNDPARENT 1 ; Next button
+    EnableWindow $0 1 ; Enable next button
   End:
 
 FunctionEnd
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -800,7 +878,6 @@ Function SitkaProductName
 
   ;MessageBox MB_OK "Top of SitkaProductName"
   Call SetAppNameSitkaProductNameAndVersion
-  ;MessageBox MB_OK "After SitkaProductNameUpdate call"
 
   !insertmacro MUI_HEADER_TEXT "$(TEXT_SITKA_PRODUCT_NAME_TITLE)" "$(TEXT_SITKA_PRODUCT_NAME_SUBTITLE)"
   nsDialogs::Create 1018
