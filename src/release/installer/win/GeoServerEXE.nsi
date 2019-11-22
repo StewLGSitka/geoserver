@@ -774,6 +774,8 @@ FunctionEnd
 
 Function ServiceCreds
 
+  Var /Global ServiceCredsErrorMessageHWND
+
   ; If we are running as manual (not a service), no need to ask for Service credentials
   StrCmp $IsManual 1 SkipServiceCreds
   
@@ -800,6 +802,10 @@ Function ServiceCreds
   ${NSD_CreateText} 70u 58u 150u 14u $ServicePass
   Pop $ServicePassHWND
   ${NSD_OnChange} $ServicePassHWND ServiceUsernameAndPasswordCheck
+
+  ; Error message about the username / password
+  ${NSD_CreateLabel} 70u 78u 100% 12u " "
+  Pop $ServiceCredsErrorMessageHWND
 
   nsDialogs::Show
 
@@ -842,10 +848,14 @@ Function ServiceUsernameAndPasswordCheck
   NoContinue:
     GetDlgItem $0 $HWNDPARENT 1 ; Next button
     EnableWindow $0 0 ; Disable next button
+	; Show error message
+    ${NSD_SetText} $ServiceCredsErrorMessageHWND "Problem with Username or Password - likely excess whitespace"
     Goto End
-  Continue:
+  Continue:    
     GetDlgItem $0 $HWNDPARENT 1 ; Next button
     EnableWindow $0 1 ; Enable next button
+	; Clear error message
+	${NSD_SetText} $ServiceCredsErrorMessageHWND " "
   End:
 
 FunctionEnd
