@@ -199,15 +199,9 @@ Function .onInit
          ;    has '0' if everything closed normally, and '-1' if some error occurred.
   Delete $TEMP\spltmp.bmp
 	
-  StrCpy $IsManual 1  ; Set to run manually by default
+  StrCpy $IsManual 0  ; Set to run as a service by default (Sitka preference)
   StrCpy $SitkaProductName "Gemini"
-  
-  ;StrCpy $TotalCheezBall "Total Cheez Ball"
-  ;StrCpy $SitkaOverrideInstallDir  "$PROGRAMFILES\${APPNAMEANDVERSION}"
-  ;StrCpy $SitkaOverrideInstallDir  "Another Cheez Ball"
-  
-  ;StrCpy $CheezWiz "Cheezy Wiz"
-		
+  		
 FunctionEnd
 
 ; Check the user type, and quit if it's not an administrator.
@@ -391,8 +385,8 @@ FunctionEnd
 ; used on the system, and put the result on the top of the stack
 Function FindDataDirPath
 
-  MessageBox MB_OK "Top of FindDataDirPath"
-  MessageBox MB_OK "About to look for GEOSERVER_DATA_DIR_$SitkaProductName"
+  ;MessageBox MB_OK "Top of FindDataDirPath"
+  ;MessageBox MB_OK "About to look for GEOSERVER_DATA_DIR_$SitkaProductName"
 
   ClearErrors
   ReadEnvStr $1 GEOSERVER_DATA_DIR_$SitkaProductName
@@ -410,7 +404,7 @@ Function FindDataDirPath
     Goto End
 
   End:
-    MessageBox MB_OK "DataDirType : $DataDirType  -- $1"
+    ;MessageBox MB_OK "DataDirType : $DataDirType  -- $1"
 	
     ClearErrors
     Push $1
@@ -441,7 +435,7 @@ FunctionEnd
 ; Runs before the page is loaded to ensure that the better value (if any) is always reset
 Function GetDataDir
 
-  MessageBox MB_OK "Top of GetDataDir"	
+  ;MessageBox MB_OK "Top of GetDataDir"	
 
   ${If} $DataDir == ""
     Call FindDataDirPath
@@ -453,7 +447,7 @@ FunctionEnd
 ; Data_dir page display
 Function DataDir
 	
-  MessageBox MB_OK "Top of DataDir"	
+  ;MessageBox MB_OK "Top of DataDir"	
 	
   !insertmacro MUI_HEADER_TEXT "$(TEXT_DATADIR_TITLE)" "$(TEXT_DATADIR_SUBTITLE)"
 
@@ -611,7 +605,7 @@ FunctionEnd
 ; When done, set variable permanently
 Function DataDirLeave
 
-  MessageBox MB_OK "Top of DataDirLeave"
+  ;MessageBox MB_OK "Top of DataDirLeave"
 
   ${If} $DataDirType == 0 ; use the default
     StrCpy $DataDir "$INSTDIR\data_dir"
